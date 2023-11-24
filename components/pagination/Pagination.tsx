@@ -1,3 +1,4 @@
+import * as React from 'react';
 import DoubleLeftOutlined from '@ant-design/icons/DoubleLeftOutlined';
 import DoubleRightOutlined from '@ant-design/icons/DoubleRightOutlined';
 import LeftOutlined from '@ant-design/icons/LeftOutlined';
@@ -6,20 +7,19 @@ import classNames from 'classnames';
 import type { PaginationLocale, PaginationProps as RcPaginationProps } from 'rc-pagination';
 import RcPagination from 'rc-pagination';
 import enUS from 'rc-pagination/lib/locale/en_US';
-import * as React from 'react';
+
 import { ConfigContext } from '../config-provider';
 import useSize from '../config-provider/hooks/useSize';
 import useBreakpoint from '../grid/hooks/useBreakpoint';
 import { useLocale } from '../locale';
-import { MiddleSelect, MiniSelect } from './Select';
+import { CustomSelect, SelectContext } from './Select';
+import type { SelectContextProps } from './Select';
 import useStyle from './style';
-import useCSSVar from './style/cssVar';
-import { useToken } from '../theme/internal';
-import BorderedStyle from './style/bordered';
 
-export interface PaginationProps extends RcPaginationProps {
+export interface PaginationProps extends Omit<RcPaginationProps, 'showSizeChanger'> {
   showQuickJumper?: boolean | { goButton?: React.ReactNode };
   size?: 'default' | 'small';
+  showSizeChanger?: boolean | { showSearch?: boolean };
   responsive?: boolean;
   role?: string;
   totalBoundaryShowSizeChanger?: number;
@@ -52,16 +52,15 @@ const Pagination: React.FC<PaginationProps> = (props) => {
     ...restProps
   } = props;
   const { xs } = useBreakpoint(responsive);
-  const [, token] = useToken();
 
   const { getPrefixCls, direction, pagination = {} } = React.useContext(ConfigContext);
   const prefixCls = getPrefixCls('pagination', customizePrefixCls);
 
   // Style
-  const [, hashId] = useStyle(prefixCls);
-  const wrapCSSVar = useCSSVar(prefixCls);
+  const [wrapSSR, hashId] = useStyle(prefixCls);
 
-  const mergedShowSizeChanger = showSizeChanger ?? pagination.showSizeChanger;
+  const mergedShowSizeChanger =
+    typeof showSizeChanger === 'boolean' ? showSizeChanger : pagination.showSizeChanger;
 
   const iconsProps = React.useMemo<Record<PropertyKey, React.ReactNode>>(() => {
     const ellipsis = <span className={`${prefixCls}-item-ellipsis`}>•••</span>;
@@ -116,7 +115,6 @@ const Pagination: React.FC<PaginationProps> = (props) => {
     {
       [`${prefixCls}-mini`]: isSmall,
       [`${prefixCls}-rtl`]: direction === 'rtl',
-      [`${prefixCls}-bordered`]: token.wireframe,
     },
     pagination?.className,
     className,
@@ -126,9 +124,16 @@ const Pagination: React.FC<PaginationProps> = (props) => {
 
   const mergedStyle: React.CSSProperties = { ...pagination?.style, ...style };
 
-  return wrapCSSVar(
-    <>
-      {token.wireframe && <BorderedStyle prefixCls={prefixCls} />}
+  const memoizedContextValue = React.useMemo<SelectContextProps>(
+    () => ({
+      size: isSmall ? 'small' : 'middle',
+      showSearch: typeof showSizeChanger === 'boolean' ? true : showSizeChanger?.showSearch ?? true,
+    }),
+    [showSizeChanger, isSmall],
+  );
+
+  return wrapSSR(
+    <SelectContext.Provider value={memoizedContextValue}>
       <RcPagination
         {...iconsProps}
         {...restProps}
@@ -136,11 +141,11 @@ const Pagination: React.FC<PaginationProps> = (props) => {
         prefixCls={prefixCls}
         selectPrefixCls={selectPrefixCls}
         className={extendedClassName}
-        selectComponentClass={selectComponentClass || (isSmall ? MiniSelect : MiddleSelect)}
+        selectComponentClass={selectComponentClass ?? CustomSelect}
         locale={locale}
         showSizeChanger={mergedShowSizeChanger}
       />
-    </>,
+    </SelectContext.Provider>,
   );
 };
 
